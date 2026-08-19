@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Temporary review and rendering files
+tmp/
+
+# LaTeX intermediate files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Models, datasets, and experiment artifacts
+data/
+datasets/
+checkpoints/
+models/
+runs/
+wandb/
+
+# Keep the final compiled proposal, but ignore other generated PDF artifacts
+output/pdf/*
+!output/pdf/finprm_proposal.pdf

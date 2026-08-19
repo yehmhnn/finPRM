@@ -1,0 +1,380 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[a4paper,margin=18mm,columnsep=7mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+\usepackage[numbers,sort&compress]{natbib}
+
+\definecolor{navy}{HTML}{17365D}
+\definecolor{softgray}{HTML}{F3F5F7}
+\definecolor{codegreen}{HTML}{1B6E3C}
+\hypersetup{colorlinks=true,linkcolor=navy,citecolor=navy,urlcolor=navy}
+\setlist{leftmargin=*,nosep}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3.5pt}
+\renewcommand{\arraystretch}{1.12}
+
+\lstdefinestyle{compact}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{softgray},
+  frame=single,
+  rulecolor=\color{softgray},
+  breaklines=true,
+  columns=fullflexible,
+  keywordstyle=\color{navy}\bfseries,
+  commentstyle=\color{codegreen},
+  showstringspaces=false
+}
+
+\newcommand{\projectname}{FinPRM-Adapt}
+\newcommand{\todoauthor}{\textit{Authors to be inserted}}
+
+\title{\textbf{Retrieval or Fine-Tuning?}\\
+Parameter-Efficient Adaptation of Process Reward Models\\
+to Financial Numerical Reasoning}
+\author{\todoauthor}
+\date{Research proposal and implementation plan}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Process reward models (PRMs) evaluate intermediate reasoning steps and can guide test-time selection more precisely than outcome-only verifiers. Their reliability under domain shift, however, remains uncertain. This project studies whether a general mathematical process verifier can be adapted to financial numerical reasoning through retrieval augmentation, parameter-efficient supervised fine-tuning, or their combination. We derive automatically verifiable step-level supervision from FinQA's expert-authored questions and executable gold programs. The required core system is a binary discriminative PRM that scores a candidate structured operation conditioned on the financial context, question, and a correct program prefix. Four conditions---unadapted, retrieval-only, LoRA-only, and retrieval plus LoRA---are compared under standard and controlled out-of-distribution splits. Evaluation prioritizes intrinsic process verification, including macro-F1, precision--recall performance, calibration, and first-error localization; a bounded Best-of-$N$ experiment measures downstream utility. A local ``financial reasoning checker'' demonstrates the verifier without presenting it as an investment-advice system. The design is scoped for two researchers over four weeks, with GPU-based QLoRA training and laptop-local inference. Error typing and generative critiques are explicitly optional extensions attempted only after the binary core is complete.
+\end{abstract}
+
+\section{Introduction}
+Large language models can produce correct-looking answers through invalid intermediate reasoning. Outcome reward models score complete solutions and therefore cannot reliably distinguish a sound derivation from a lucky final answer. PRMs instead assign rewards at intermediate steps, enabling fine-grained error detection and reward-guided selection \citep{lightman2023lets,mathshepherd2024}.
+
+Most established PRMs are trained and evaluated on general mathematical reasoning. Financial question answering introduces a controlled but meaningful distribution shift: the arithmetic is familiar, while the inputs contain tables, reporting periods, domain terminology, percentages, and references to previously computed values. FinQA is suitable for studying this shift because it pairs expert-authored questions over financial reports with supporting evidence, numerical answers, and executable reasoning programs \citep{finqa2021}.
+
+The central question is not whether another model can be fine-tuned to answer FinQA. Instead, it is whether a process verifier can determine if a \emph{candidate next operation} is valid. We compare two adaptation mechanisms. Retrieval provides similar verified examples at inference time without changing model parameters, following work on retrieval-enhanced PRM generalization \citep{retrievalprm2025}. Low-rank adaptation (LoRA) modifies a small set of trainable parameters while freezing the backbone \citep{lora2022}. Their direct comparison under a shared data and compute budget is practically relevant and not answered by simply evaluating a finance-tuned answer generator.
+
+\paragraph{Expected contributions.}
+This project aims to contribute:
+\begin{enumerate}
+  \item a reproducible transformation from FinQA programs into positive and hard-negative process-verification examples;
+  \item a controlled comparison of retrieval, LoRA, and combined PRM adaptation;
+  \item an evaluation protocol separating step verification from final-answer selection and testing multiple forms of distribution shift; and
+  \item a laptop-local demonstrator that highlights the first suspicious operation in a structured financial derivation.
+\end{enumerate}
+
+\section{Background and Related Work}
+\subsection{Automatic process supervision}
+Math-Shepherd estimates step quality through continuations and final-answer verification, enabling process supervision without human step labels \citep{mathshepherd2024}. AutoPSV instead derives automatic process annotations from relative changes in the confidence of an outcome-supervised verifier \citep{autopsv2024}. These approaches make process supervision scalable, but the quality of automatically inferred labels remains a central concern. The Qwen PRM study reports that naive Monte Carlo labeling can generalize poorly and advocates consensus filtering and combined step- and response-level evaluation \citep{lessonsprm2025}.
+
+Our core design avoids expensive rollout-based labels wherever possible. It uses executable FinQA programs to construct locally checkable candidate operations. This provides a high-precision experimental substrate while retaining a realistic domain shift.
+
+\subsection{What a process reward should represent}
+A conventional PRM predicts binary correctness for each step. Other work treats a partial solution as a value-estimation problem. OVM learns the potential of a reasoning prefix from outcome supervision \citep{ovm2023}, while the Process Q-value Model optimizes rankings between candidate steps rather than independent correctness labels \citep{pqm2025}. These formulations are valuable but add objectives and sampling requirements. For a one-month project, binary next-operation verification is the required task. Ranking-based rewards are left as future work.
+
+\subsection{Generative, error-aware, and reflective PRMs}
+Generative PRMs reason before judging rather than outputting only a scalar. GenPRM uses explicit reasoning and code verification and scales verification-time computation \citep{genprm2025}; R-PRM combines rationale-generating supervision with preference optimization \citep{rprm2025}. Error-aware hierarchical supervision predicts specific error types before estimating correctness \citep{pathfinder2025}. Reflective-PRM research further challenges the common assumption that all steps after the first error are necessarily invalid, since long chains can contain self-correction \citep{beyondfirsterror2025}.
+
+These findings motivate optional critique generation, but they also argue for a conservative core task. We evaluate a candidate next operation after a known-correct prefix, so a negative label does not contaminate an entire suffix. If time remains, the binary head will be extended with error-type labels or short critiques.
+
+\subsection{Generalization and evaluation}
+RetrievalPRM identifies both question-level and step-level out-of-distribution (OOD) shifts and retrieves related questions and steps as demonstrations \citep{retrievalprm2025}. PRMBench shows that aggregate correctness alone does not characterize process verification; it evaluates fine-grained soundness and sensitivity across diverse errors \citep{prmbench2025}. Best-of-$N$ can also reward outcome recognition rather than genuine process sensitivity \citep{lessonsprm2025}. We therefore make intrinsic step-level evaluation primary and treat Best-of-$N$ as secondary evidence.
+
+\section{Problem Definition}
+Let a FinQA instance contain financial evidence $E$, a question $q$, and an executable gold program
+\begin{equation}
+  P^*=(s_1^*,s_2^*,\ldots,s_T^*),
+\end{equation}
+where each $s_t^*$ is an operator with arguments drawn from $E$, constants, or prior results. At step $t$, the verifier receives a correct prefix $P^*_{<t}$ and a candidate operation $\tilde{s}_t$. It predicts
+\begin{equation}
+  r_\theta(E,q,P^*_{<t},\tilde{s}_t)\in[0,1],
+\end{equation}
+interpreted as the probability that $\tilde{s}_t$ is a valid next operation.
+
+The required model minimizes binary cross-entropy:
+\begin{equation}
+  \mathcal{L}_{\mathrm{BCE}}=-y\log r_\theta-(1-y)\log(1-r_\theta),
+\end{equation}
+where $y=1$ for a gold step and $y=0$ for a verified corruption. This formulation tests process verification rather than direct answer generation.
+
+\begin{table}[t]
+\centering
+\caption{Notation used in the process-verification task. A star marks gold, dataset-provided reasoning; a tilde marks a candidate that must be judged.}
+\label{tab:notation}
+\small
+\begin{tabularx}{\columnwidth}{>{\raggedright\arraybackslash}p{12mm} X}
+\toprule
+Symbol & Meaning \\
+\midrule
+$E$ & Financial evidence: the relevant table rows and text. \\
+$q$ & The FinQA question. \\
+$P^*$ & The complete gold executable program. \\
+$T$ & Number of operations in the gold program. \\
+$t$ & Position of the operation currently being evaluated. \\
+$s_t^*$ & Correct gold operation at position $t$. \\
+$P^*_{<t}$ & Correct gold operations before position $t$. \\
+$\tilde{s}_t$ & Candidate next operation judged by the PRM. \\
+$r_\theta$ & PRM score; larger values mean ``more likely correct.'' \\
+$\theta$ & Trainable model parameters, including the LoRA adapter. \\
+$y$ & Binary target: 1 for correct and 0 for incorrect. \\
+$x_t^+$ & One positive training example constructed at position $t$. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Research Questions and Hypotheses}
+\textbf{RQ1:} How much do retrieval augmentation and LoRA-based SFT improve a general verifier's accuracy on structured FinQA operations?
+
+\textbf{RQ2:} Do retrieval and LoRA provide complementary gains, or does their combination yield little improvement over the stronger individual method?
+
+\textbf{RQ3:} How robust are the adaptation methods to company, program-template, reasoning-length, and generator-style shifts?
+
+\textbf{RQ4:} Do improvements in intrinsic step verification translate into better selection of complete candidate programs?
+
+\textbf{H1:} Both retrieval and LoRA will outperform the unadapted verifier on in-domain step classification.
+
+\textbf{H2:} LoRA will perform best on frequent in-domain operation patterns, while retrieval will lose less performance under template and company shift.
+
+\textbf{H3:} Retrieval plus LoRA will achieve the strongest mean performance but may be less calibration-stable if retrieved examples are misleading.
+
+\textbf{H4:} Step-level gains will correlate only imperfectly with Best-of-$N$ gains, confirming that response-level selection is an incomplete PRM evaluation.
+
+\section{Dataset Construction}
+\subsection{What FinQA provides and what we create}
+FinQA does \emph{not} contain ready-made positive and negative examples for training a binary PRM. For each source instance, FinQA provides the financial report context, a question, supporting evidence, the numerical answer, and one expert-annotated executable gold program \citep{finqa2021}. The gold program contains correct operations, but the dataset does not provide a matched set of plausible incorrect next operations.
+
+FinQA contains 8,281 question--answer instances drawn from 2,789 financial-report pages: 6,251 training, 883 development, and 1,147 test instances. The reports do not overlap across these splits. Across the full dataset, 59.10\% of gold programs contain one operation, 32.71\% contain two, and 8.19\% contain three or more \citep{finqa2021}. Program operations---rather than source questions---determine the number of positive PRM examples.
+
+Our preprocessing pipeline constructs the PRM dataset. It splits each gold program into individual operations, uses each gold operation as a positive candidate, and creates plausible negative candidates by modifying that operation. Each constructed example stores the original FinQA identifier, the evidence and question, the correct prefix, the candidate next operation, its binary label, and the rule used to create it. Thus, FinQA supplies the source problems and correct programs; this project supplies the step-level classification examples.
+
+\subsection{Source data and leakage controls}
+We use the official FinQA splits and preserve document-level separation where supplied \citep{finqa2021}. The test set is never used for retrieval, threshold selection, prompt development, or negative-generation tuning. Retrieval indexes contain training examples only. Development data is used for model selection and calibration.
+
+FinQA's program accuracy can penalize alternative valid programs, whereas execution accuracy can accept accidental equivalences. We therefore do not label a candidate step as incorrect simply because it differs from the gold program. A negative label is used only when the candidate is clearly wrong---for example, it uses the wrong operator, the wrong input value, or an invalid intermediate-result reference. Any modified step that could still be valid is discarded.
+
+\subsection{Positive examples}
+For every operation $s_t^*$ in a gold program, the pipeline creates one positive example:
+\begin{equation}
+  x^+_t=(E,q,P^*_{<t},s_t^*,1).
+\end{equation}
+In plain language, this tuple contains the evidence, the question, all correct earlier operations, the correct next operation, and the label 1 (``correct''). For a three-operation gold program, the pipeline therefore creates three positive examples, one for each position.
+Evidence is limited to the gold supporting text/table facts in the initial experiments. A later robustness experiment may add distractor evidence.
+
+\subsection{Hard-negative generation}
+FinQA does not provide negative steps, so the pipeline creates them from the positive examples. For each correct operation, it makes one controlled change and labels the modified candidate 0 only if the validator confirms that the change is invalid. The retained mutation types are:
+\begin{itemize}
+  \item \textbf{operator substitution}: replace an operator with a type-compatible alternative;
+  \item \textbf{operand reversal}: swap arguments for non-commutative operations;
+  \item \textbf{evidence substitution}: replace an argument with another number from the same table or text;
+  \item \textbf{reference corruption}: use the wrong prior intermediate result;
+  \item \textbf{constant corruption}: alter percentage scales or fixed constants;
+  \item \textbf{result corruption}: retain the operation but provide an inconsistent computed value; and
+  \item \textbf{premature termination}: predict a final answer before required dependencies are resolved.
+\end{itemize}
+
+Each corruption is passed through a validator. Commutative-equivalent or execution-equivalent mutations are discarded rather than labeled negative. A stratified manual audit estimates residual label noise for every corruption class. The audit size will be fixed before model evaluation; the initial target is at least 50 examples per retained error class or all examples for smaller classes.
+
+\paragraph{Design rationale and precedent.}
+The mutations follow four principles. First, they change only one element at a time, so the error label has a clear cause. Second, replacement operators and operands remain type-compatible and are drawn from plausible local evidence, preventing trivial negatives. Third, executable checks reject mutations that remain mathematically valid. Fourth, sampling is balanced across error types so the verifier cannot succeed by learning one frequent artifact.
+
+Controlled error injection is established in PRM evaluation: PRMBench modifies reasoning chains to introduce targeted errors and evaluates whether verifiers detect them \citep{prmbench2025}. Error-aware PRMs likewise benefit from explicitly labeled mathematical and consistency errors \citep{pathfinder2025}. However, our exact procedure is not copied from those papers. The proposed contribution is a deterministic version specialized to FinQA's executable operations. Unlike LLM-generated corruptions, it records the changed operator or argument and checks the resulting program mechanically. A small evaluation on naturally produced model errors is retained to test whether performance transfers beyond synthetic mutations.
+
+\begin{lstlisting}[style=compact,caption={Conceptual construction of a next-step example.},label={lst:example}]
+context:  financial text and table evidence
+question: "What was the percentage increase?"
+prefix:   subtract(120, 100) -> #0
+candidate: divide(#0, 120) -> #1
+label:    incorrect
+error:    wrong denominator
+\end{lstlisting}
+
+\subsection{Class balance and sampling}
+Using FinQA's published program-length distribution, the 6,251 training questions imply approximately 9,300 or more gold operations, and therefore at least that many positive candidates; the exact number will be computed after parsing and validation. The target is two accepted hard negatives per positive, giving roughly 18,600 negatives and about 28,000 total training examples. If a gold step has fewer than two unambiguously invalid mutations, it contributes fewer negatives rather than accepting a questionable label.
+
+Development and test examples are created independently from their official source splits and never enter training or the retrieval index. For primary evaluation, each gold operation is paired with one accepted negative sampled according to a fixed error-type quota, producing a balanced test set. A second evaluation retains all accepted negatives to measure performance under the constructed natural distribution. All final counts, rejection rates, and counts by mutation type will be reported after preprocessing rather than treated as predetermined results.
+
+Training batches will balance positive and negative labels. Negative types will be capped to prevent simple operator substitutions from dominating. A 5,000-example pilot is used to debug the pipeline and LoRA configuration before the full approximately 28,000-example training run.
+
+\section{Experimental Conditions}
+All conditions use the same underlying verifier backbone, input serialization, candidate steps, and evaluation sets. The backbone will be a recent open-weight model in the 1.5B--4B range. The exact checkpoint will be frozen before experiments based on license compatibility, tokenizer support for FinQA notation, and successful local quantized inference.
+
+\begin{table}[t]
+\centering
+\caption{Required comparison. Only the adapter parameters differ between base and LoRA conditions.}
+\label{tab:conditions}
+\small
+\begin{tabular}{lcc}
+\toprule
+Condition & Retrieval & LoRA-SFT \\
+\midrule
+Base PRM & No & No \\
+Retrieval PRM & Yes & No \\
+FinQA LoRA-PRM & No & Yes \\
+Retrieval + LoRA & Yes & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Base verifier}
+The base condition receives a fixed instruction and the serialized example. It outputs a probability or two label logits for \texttt{correct} and \texttt{incorrect}. Prompt wording and decision parsing are fixed on development data.
+
+\subsection{Retrieval PRM}
+Training examples are embedded and indexed. At inference, the system retrieves $k$ demonstrations using (a) question similarity and (b) joint similarity between the question, prefix, and candidate operation. We evaluate small $k$ values that fit local context limits. Random retrieval and no retrieval are controls. Retrieval labels are never taken from evaluation examples.
+
+\subsection{LoRA-PRM}
+The backbone is frozen and trained with LoRA adapters on the binary process dataset. Hyperparameters are selected from a small predefined grid on development macro-F1. QLoRA may be used to reduce memory requirements \citep{qlora2023}. Training runs on Colab or a university GPU; the final adapter or merged quantized model must run on the 16-GB Apple-silicon laptop.
+
+\subsection{Combined condition}
+The LoRA-adapted verifier receives demonstrations from the same retrieval pipeline. This isolates whether contextual and parameter adaptation are complementary. The combined prompt length and inference cost are reported.
+
+\section{Controlled Distribution Shifts}
+The following evaluations address different notions of generalization:
+\begin{enumerate}
+  \item \textbf{Official split:} standard FinQA train/development/test evaluation.
+  \item \textbf{Company OOD:} hold out companies from adaptation and retrieval demonstrations.
+  \item \textbf{Template OOD:} group programs by normalized operator sequence and hold out selected compositions.
+  \item \textbf{Length OOD:} train/adapt on shorter programs and test on longer programs.
+  \item \textbf{Generator-style OOD:} optional evaluation on structured candidates produced by a model rather than deterministic corruptions.
+\end{enumerate}
+The first four are required. Generator-style OOD is attempted only if candidate parsing is reliable by the end of Week 2.
+
+\section{Evaluation Protocol}
+\subsection{Intrinsic process-verification metrics}
+The primary metric is macro-F1, which weights correct and incorrect classes equally. We additionally report:
+\begin{itemize}
+  \item precision, recall, and per-class F1;
+  \item area under the ROC and precision--recall curves;
+  \item Brier score and expected calibration error;
+  \item first-error localization accuracy on corrupted full programs; and
+  \item accuracy by corruption type, program length, and OOD split.
+\end{itemize}
+
+Thresholds are selected once on development data. Because all systems evaluate the same examples, uncertainty is estimated through paired bootstrap confidence intervals. Pairwise differences in binary predictions may additionally be tested using McNemar's test, with Holm correction for the planned comparisons.
+
+\subsection{Downstream Best-of-\texorpdfstring{$N$}{N} evaluation}
+A bounded downstream experiment constructs $N\in\{4,8\}$ complete candidate programs per question. Initially, candidates are generated through controlled program corruption; model-generated programs may be added if time permits. We compare random selection, execution-equivalent majority voting where defined, the four verifier conditions, and an oracle that selects a correct candidate whenever one exists.
+
+Step scores will be aggregated using predefined rules: minimum step score, mean log score, and length-normalized sum of log scores. Reporting multiple aggregations is necessary because products favor short programs and minima can be dominated by one miscalibrated step.
+
+The main downstream metric is selection accuracy conditional on at least one correct candidate. Final execution accuracy and oracle gap closed are secondary. No claim about PRM quality will be based on Best-of-$N$ alone.
+
+\subsection{Planned result presentation}
+No numerical findings are assumed in this proposal. The final report will include a table of the following form:
+
+\begin{table}[t]
+\centering
+\caption{Planned primary results. Values are intentionally blank until experiments are run.}
+\label{tab:results-template}
+\scriptsize
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+Method & Macro-F1 & AUPRC & Brier$\downarrow$ & First error \\
+\midrule
+Base & --- & --- & --- & --- \\
+Retrieval & --- & --- & --- & --- \\
+LoRA & --- & --- & --- & --- \\
+Retrieval + LoRA & --- & --- & --- & --- \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\section{Implementation Plan}
+\subsection{System architecture}
+The implementation consists of six modules:
+\begin{enumerate}
+  \item \textbf{FinQA loader}: reads official splits, evidence, answers, and programs;
+  \item \textbf{program executor}: validates operations and intermediate references;
+  \item \textbf{process-data builder}: creates positives, corruptions, provenance, and audit samples;
+  \item \textbf{retriever}: embeds training examples and returns controlled demonstrations;
+  \item \textbf{verifier}: runs the base or LoRA-adapted binary PRM; and
+  \item \textbf{evaluation/UI}: calculates metrics and presents step-level judgments.
+\end{enumerate}
+
+Every generated example receives a stable identifier linking it to the FinQA source instance, program step, corruption rule, random seed, and validator version. Configuration files record model revisions, prompts, LoRA hyperparameters, retrieval settings, and splits.
+
+\subsection{Input serialization}
+A uniform text schema will be used across all conditions:
+\begin{lstlisting}[style=compact]
+[EVIDENCE]
+<supporting text and normalized table rows>
+[QUESTION]
+<question>
+[CORRECT PREFIX]
+<operations and intermediate values>
+[CANDIDATE NEXT OPERATION]
+<candidate>
+[TASK]
+Return CORRECT or INCORRECT.
+\end{lstlisting}
+Intermediate values are executed rather than trusted from generated text. Serialization variants are compared only on development data and then frozen.
+
+\subsection{Compute and deployment}
+Training uses Colab or a university GPU. Mixed precision, gradient accumulation, and QLoRA are permitted. The required deliverable is laptop-local inference using a quantized model runtime. Latency, peak memory, model size, and retrieval-index size are reported alongside accuracy. A 1.5B checkpoint is the fallback if a 4B checkpoint cannot meet the memory or latency target.
+
+\subsection{Reproducibility}
+The repository will include environment files, fixed seeds, dataset checksums, preprocessing scripts, configuration files, and a one-command evaluation entry point. At least two training seeds are desirable; if compute permits only one full training run, the limitation will be stated and bootstrap uncertainty will not be misrepresented as training-seed variance.
+
+\section{Demonstrator}
+The local demonstrator is a financial numerical reasoning checker, not an investment system. A user can select a FinQA example or enter a compatible small table, question, correct-prefix assumption, and candidate operation. The interface displays:
+\begin{itemize}
+  \item the binary process reward;
+  \item the first operation below a calibrated threshold;
+  \item retrieved examples and their provenance; and
+  \item deterministic execution details where available.
+\end{itemize}
+The interface must distinguish model judgment from executable verification. It must not produce stock recommendations, expected returns, or personalized financial advice.
+
+\section{Optional Extensions and Stop Rule}
+The following extensions are attempted only after all four core conditions have complete intrinsic results and the evaluation code is frozen:
+\begin{enumerate}
+  \item \textbf{Error-type head:} predict the corruption category jointly with correctness.
+  \item \textbf{Generative critique:} explain the detected error before returning the binary label.
+  \item \textbf{Natural-language steps:} verbalize programs or evaluate model-generated reasoning traces.
+  \item \textbf{Pairwise ranking:} compare candidate next operations using a Q-value-style objective.
+\end{enumerate}
+The first optional priority is error typing because labels already arise from the corruption generator. Generative critiques are second because they require additional target construction and evaluation.
+
+\section{Risks and Mitigations}
+\textbf{Synthetic negatives are too easy.} A classifier may learn mutation artifacts rather than validity. We include same-table substitutions, type-compatible operators, naturally generated candidates where feasible, and evaluation by corruption type.
+
+\textbf{Alternative programs are mislabeled.} We discard execution-equivalent candidates and manually audit ambiguous templates. The report separates exact program agreement from semantic validity.
+
+\textbf{Retrieval leaks labels.} Only training examples enter the index; company and template OOD indexes exclude held-out groups. Duplicate and near-duplicate checks are logged.
+
+\textbf{LoRA training exceeds compute.} We begin with a small subset and 1.5B fallback, cap sequence length, and prioritize one reliable model over multiple backbones.
+
+\textbf{Best-of-$N$ rewards outcome sensitivity.} Intrinsic step metrics remain primary, and counterexamples with correct answers but corrupted processes are analyzed.
+
+\textbf{The binary system is not sufficiently informative.} Error typing is the first optional extension, but the binary verifier remains a complete research contribution if carefully evaluated.
+
+\section{Ethical and Practical Considerations}
+FinQA is a research benchmark derived from public financial reports, not a source of current prices or personalized investor information. The demonstrator is intended to audit structured numerical reasoning. It must communicate uncertainty, cite dataset provenance, avoid claims of guaranteed correctness, and never convert a process score into a buy/sell recommendation. Model outputs can be wrong even when well calibrated; deterministic execution should take precedence for operations that can be checked exactly.
+
+\section{Success Criteria}
+The project is considered complete if it delivers:
+\begin{enumerate}
+  \item a validated FinQA-to-process-supervision pipeline;
+  \item all four conditions evaluated on the official split and at least three controlled shifts;
+  \item intrinsic metrics with uncertainty and a bounded Best-of-$N$ study;
+  \item a reproducible LoRA adapter and laptop-local inference path; and
+  \item a working demonstrator that exposes step scores and retrieved provenance.
+\end{enumerate}
+Success does not require LoRA or retrieval to improve performance. A carefully supported negative result---for example, that retrieval matches LoRA or that synthetic adaptation fails on natural candidates---would still answer the research questions.
+
+\section{Conclusion}
+This proposal turns FinQA into a controlled testbed for process-reward-model adaptation. The staged design makes binary next-operation verification the required core, compares contextual and parameter adaptation fairly, and evaluates process sensitivity independently of final-answer selection. It is feasible for two researchers in one month because it uses existing expert-authored data, executable programs, parameter-efficient training, and bounded downstream experiments. At the same time, its OOD splits, calibration analysis, and retrieval--LoRA comparison provide a substantive research question beyond straightforward benchmark fine-tuning.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
