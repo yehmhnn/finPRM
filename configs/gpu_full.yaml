@@ -1,0 +1,17 @@
+# Final values are frozen only after the CUDA smoke test passes.
+runtime:
+  device: cuda
+  seed: 42
+data:
+  root: data/raw/finqa
+  max_examples: null
+model:
+  checkpoint: TO_BE_FROZEN
+  max_length: 1024
+training:
+  batch_size: 2
+  gradient_accumulation_steps: 16
+  epochs: 2
+  mixed_precision: bf16
+  quantization: qlora
+

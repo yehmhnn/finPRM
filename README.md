@@ -16,7 +16,36 @@ The proposed study constructs binary step-verification examples from FinQA's exe
 - `output/pdf/finprm_proposal.pdf` - compiled proposal
 - `PRM project.pdf` - original project concept
 
-Implementation code and experiment configurations will be added as the project develops.
+The first implementation milestone provides a strict FinQA loader and a
+deterministic executor for the dataset's program language. Model training is
+added only after this hardware-independent foundation is validated.
+
+## Local setup
+
+Use Python 3.11 when creating a fresh environment. The current foundation also
+runs on Python 3.9 so it can be tested with the macOS system Python.
+
+```sh
+uv sync --extra dev --python 3.11
+uv run python scripts/download_finqa.py
+uv run python scripts/validate_finqa.py data/raw/finqa/train.json --limit 100
+uv run pytest
+```
+
+The dataset is downloaded from the official FinQA repository at a pinned
+revision. Files under `data/` are intentionally ignored by Git and are not
+uploaded to this repository.
+
+## Laptop and GPU configurations
+
+- `configs/local.yaml` uses `hf-internal-testing/tiny-random-bert`. This is a
+  deliberately tiny model with random weights. Its predictions are meaningless;
+  it only verifies tokenization, batching, training, saving, and reloading.
+- `configs/gpu_smoke.yaml` runs a small subset with the real model on CUDA.
+- `configs/gpu_full.yaml` is used only after the CUDA smoke test passes.
+
+The real model checkpoint remains `TO_BE_FROZEN` until tokenizer compatibility,
+license, local inference, and GPU memory requirements have been checked.
 
 ## Compile the proposal
 

@@ -1,0 +1,16 @@
+# Fast laptop integration test. Scores are not research results.
+runtime:
+  device: auto
+  seed: 42
+data:
+  root: data/raw/finqa
+  max_examples: 100
+model:
+  checkpoint: hf-internal-testing/tiny-random-bert
+  max_length: 256
+training:
+  batch_size: 2
+  epochs: 1
+  mixed_precision: "no"
+  quantization: false
+

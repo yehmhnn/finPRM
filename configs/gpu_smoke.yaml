@@ -1,0 +1,17 @@
+# Run this before any full GPU experiment.
+runtime:
+  device: cuda
+  seed: 42
+data:
+  root: data/raw/finqa
+  max_examples: 500
+model:
+  checkpoint: TO_BE_FROZEN
+  max_length: 512
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  epochs: 1
+  mixed_precision: bf16
+  quantization: false
+

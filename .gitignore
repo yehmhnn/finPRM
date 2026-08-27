@@ -24,12 +24,17 @@ __pycache__/
 venv/
 
 # Models, datasets, and experiment artifacts
-data/
-datasets/
-checkpoints/
-models/
-runs/
-wandb/
+/data/
+/datasets/
+/checkpoints/
+/models/
+/runs/
+/wandb/
+
+# Local environment and coverage artifacts
+.coverage
+.pytest_cache/
+*.egg-info/
 
 # Keep the final compiled proposal, but ignore other generated PDF artifacts
 output/pdf/*
