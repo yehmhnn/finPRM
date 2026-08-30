@@ -19,6 +19,7 @@ class FinQAExample:
     table: Tuple[Tuple[str, ...], ...]
     pre_text: Tuple[str, ...]
     post_text: Tuple[str, ...]
+    supporting_facts: Tuple[str, ...]
     program: Optional[str]
     execution_answer: Any
 
@@ -60,6 +61,13 @@ def _parse_record(record: Any, index: int) -> FinQAExample:
     program = qa.get("program")
     if program is not None and not isinstance(program, str):
         raise FinQASchemaError(f"{example_id}: qa.program must be text or null")
+    raw_supporting = qa.get("gold_inds", {})
+    if raw_supporting is None:
+        raw_supporting = {}
+    if not isinstance(raw_supporting, dict) or not all(
+        isinstance(value, str) for value in raw_supporting.values()
+    ):
+        raise FinQASchemaError(f"{example_id}: qa.gold_inds must map IDs to text")
 
     return FinQAExample(
         example_id=example_id,
@@ -67,6 +75,7 @@ def _parse_record(record: Any, index: int) -> FinQAExample:
         table=tuple(rows),
         pre_text=_strings(record.get("pre_text", []), "pre_text", example_id),
         post_text=_strings(record.get("post_text", []), "post_text", example_id),
+        supporting_facts=tuple(raw_supporting.values()),
         program=program,
         execution_answer=qa.get("exe_ans"),
     )

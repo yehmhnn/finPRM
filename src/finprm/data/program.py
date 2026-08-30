@@ -27,6 +27,9 @@ class Operation:
     operator: str
     arguments: Tuple[str, str]
 
+    def __str__(self) -> str:
+        return f"{self.operator}({self.arguments[0]}, {self.arguments[1]})"
+
 
 @dataclass(frozen=True)
 class ExecutionStep:
@@ -72,6 +75,11 @@ def parse_program(program: str) -> Tuple[Operation, ...]:
         operations.append(Operation(operator, (arguments[0], arguments[1])))
         position = match.end()
     return tuple(operations)
+
+
+def format_program(operations: Sequence[Operation]) -> str:
+    """Serialize operations using FinQA's canonical sequential syntax."""
+    return ", ".join(str(operation) for operation in operations)
 
 
 def parse_number(text: str) -> float:
@@ -198,4 +206,3 @@ def execute_program(
     if isinstance(final, float):
         final = round(final, 5)
     return ExecutionResult(True, final, tuple(steps))
-

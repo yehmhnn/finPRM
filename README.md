@@ -47,6 +47,33 @@ uploaded to this repository.
 The real model checkpoint remains `TO_BE_FROZEN` until tokenizer compatibility,
 license, local inference, and GPU memory requirements have been checked.
 
+## Build a process-supervision pilot
+
+Each gold FinQA operation becomes a positive next-step example. The builder also
+creates conservative negatives through one operator substitution or operand
+reversal at a time. It rejects candidates that fail execution, preserve the gold
+step value, or preserve the complete program's final answer.
+
+```sh
+uv run python scripts/build_process_data.py \
+  data/raw/finqa/train.json \
+  --split train \
+  --output data/processed/pilot-train-100 \
+  --limit 100 \
+  --negatives-per-positive 2 \
+  --seed 42
+```
+
+The ignored output directory contains:
+
+- `examples.jsonl`: complete model inputs, targets, and audit metadata;
+- `summary.json`: counts, rejection reasons, and a deterministic checksum;
+- `audit_sample.csv`: compact rows for manual label review; and
+- `audit_sample.jsonl`: the same audit examples with complete context.
+
+Generated data remains outside Git. The builder and its validation rules are
+committed so the same records can be reproduced on another machine.
+
 ## Compile the proposal
 
 From the `latex` directory:

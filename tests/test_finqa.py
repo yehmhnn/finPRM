@@ -33,6 +33,7 @@ class FinQALoaderTests(unittest.TestCase):
         example = next(load_split(path))
         self.assertEqual("report-1", example.example_id)
         self.assertEqual("add(100, 0)", example.program)
+        self.assertEqual((), example.supporting_facts)
 
     def test_rejects_inconsistent_table_width(self):
         path = self.write_split(
@@ -50,4 +51,3 @@ class FinQALoaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

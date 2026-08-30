@@ -6,8 +6,10 @@ from .program import (
     Operation,
     ProgramParseError,
     execute_program,
+    format_program,
     parse_program,
 )
+from .process_examples import ProcessExample, build_process_examples, build_split
 
 __all__ = [
     "ExecutionResult",
@@ -15,8 +17,11 @@ __all__ = [
     "FinQASchemaError",
     "Operation",
     "ProgramParseError",
+    "ProcessExample",
+    "build_process_examples",
+    "build_split",
     "execute_program",
+    "format_program",
     "load_split",
     "parse_program",
 ]
-
