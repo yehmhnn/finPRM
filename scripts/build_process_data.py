@@ -71,6 +71,11 @@ def main() -> None:
                 "gold_operation",
                 "candidate",
                 "corruption_type",
+                "original_argument",
+                "replacement_argument",
+                "replacement_source",
+                "human_valid",
+                "review_notes",
             ),
         )
         writer.writeheader()
@@ -84,6 +89,11 @@ def main() -> None:
                     "gold_operation": example.metadata.gold_operation,
                     "candidate": example.input.candidate,
                     "corruption_type": example.metadata.corruption_type,
+                    "original_argument": (example.metadata.corruption_details or {}).get("original", ""),
+                    "replacement_argument": (example.metadata.corruption_details or {}).get("replacement", ""),
+                    "replacement_source": (example.metadata.corruption_details or {}).get("replacement_source", ""),
+                    "human_valid": "",
+                    "review_notes": "",
                 }
             )
 

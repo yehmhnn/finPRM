@@ -68,6 +68,33 @@ class ProcessExampleTests(unittest.TestCase):
         ]
         self.assertEqual([], reversals)
 
+    def test_context_swap_uses_a_local_evidence_unit(self):
+        mutations = propose_mutations(
+            Operation("subtract", ("1200", "1000")), source(), 0, seed=42
+        )
+        swaps = [item for item in mutations if item.corruption_type == "entity_context_swap"]
+        self.assertTrue(swaps)
+        for swap in swaps:
+            details = dict(swap.details)
+            self.assertIn("replacement_source", details)
+            self.assertTrue(
+                details["replacement_source"].startswith(("supporting_fact:", "table_row:"))
+            )
+
+    def test_scale_mismatch_removes_explicit_multiplier(self):
+        mutations = propose_mutations(Operation("multiply", ("#0", "const_100")))
+        scale_errors = [
+            item for item in mutations if item.corruption_type == "unit_scale_mismatch"
+        ]
+        self.assertEqual("multiply(#0, const_1)", str(scale_errors[0].operation))
+
+    def test_dangling_reference_points_to_current_unavailable_step(self):
+        mutations = propose_mutations(Operation("divide", ("#0", "1000")), step_index=1)
+        dangling = [
+            item for item in mutations if item.corruption_type == "dangling_reference"
+        ]
+        self.assertEqual("divide(#1, 1000)", str(dangling[0].operation))
+
 
 if __name__ == "__main__":
     unittest.main()

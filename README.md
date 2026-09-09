@@ -51,8 +51,26 @@ license, local inference, and GPU memory requirements have been checked.
 
 Each gold FinQA operation becomes a positive next-step example. The builder also
 creates conservative negatives through one operator substitution or operand
-reversal at a time. It rejects candidates that fail execution, preserve the gold
-step value, or preserve the complete program's final answer.
+reversal at a time. Finance-specific rules additionally replace a number with a
+different number from the same local evidence unit and remove explicit percent
+or scale conversion. A diagnostic rule creates dangling intermediate references.
+The builder rejects candidates that preserve the gold step value or the complete
+program's final answer. Invalid references are retained only when the validator
+confirms that the candidate points to an unavailable step.
+
+The implemented corruption labels are:
+
+- `entity_context_swap`: substitute a number found beside the original number
+  in the same question, supporting sentence, report sentence, or table row;
+- `unit_scale_mismatch`: remove an explicit percent sign or scale multiplier;
+- `dangling_reference`: point to a current, not-yet-produced intermediate value;
+- `operator_substitution`: retain operands but change the arithmetic operator;
+- `operand_reversal`: reverse arguments for an order-sensitive operator.
+
+Arithmetic-result corruption is intentionally excluded from the structured core:
+an operation such as `subtract(4500, 1200)` does not contain a claimed result for
+us to corrupt. That error family becomes applicable only if an optional
+natural-language trace says, for example, that the result is 3100.
 
 ```sh
 uv run python scripts/build_process_data.py \
