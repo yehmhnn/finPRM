@@ -47,6 +47,32 @@ uploaded to this repository.
 The real model checkpoint remains `TO_BE_FROZEN` until tokenizer compatibility,
 license, local inference, and GPU memory requirements have been checked.
 
+## Run the local classifier smoke test
+
+The tiny random BERT checkpoint is not an experimental baseline. It verifies the
+complete software path using an unaudited pilot: stable text serialization,
+question-grouped splitting, tokenization, binary training, evaluation, model
+saving, and prediction-equivalent reloading.
+
+```sh
+uv sync --extra dev --extra ml --python 3.11
+uv run python scripts/train_smoke.py --config configs/local.yaml
+```
+
+Outputs are written under ignored `runs/local-smoke/`. Accuracy from this run is
+not a research result because the checkpoint is random and the pilot labels have
+not completed human audit.
+
+On a CUDA machine, first rebuild the ignored pilot data and run the identical
+pipeline with:
+
+```sh
+uv run python scripts/train_smoke.py --config configs/cuda_pipeline_smoke.yaml
+```
+
+This must report `"device": "cuda"` and a near-zero reload difference before a
+real checkpoint or LoRA training is attempted.
+
 ## Build a process-supervision pilot
 
 Each gold FinQA operation becomes a positive next-step example. The builder also

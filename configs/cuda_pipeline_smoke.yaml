@@ -1,6 +1,6 @@
-# Fast laptop integration test. Scores are not research results.
+# First command to run on a CUDA server. This is not a research experiment.
 runtime:
-  device: auto
+  device: cuda
   seed: 42
 data:
   input: data/processed/pilot-hard-v2/examples.jsonl
@@ -13,9 +13,10 @@ model:
   max_length: 256
 training:
   batch_size: 8
+  gradient_accumulation_steps: 1
   epochs: 1
   learning_rate: 0.00005
   mixed_precision: "no"
   quantization: false
 output:
-  directory: runs/local-smoke
+  directory: runs/cuda-pipeline-smoke
