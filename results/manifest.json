@@ -1,0 +1,36 @@
+{
+  "analysis_definitions": {
+    "corruption_type": "Negative Test samples only; accuracy is the correctly rejected fraction",
+    "step_position": "Zero-based step_index grouped as Step 1, Step 2, and Step 3+; both labels included"
+  },
+  "figure_files": {
+    "overview.png": {
+      "sha256": "49ce63fa01c8563199abadbe2613ac2235b53b36e3617d2c3e420f18964fa372",
+      "source": "User-provided finalized method overview"
+    }
+  },
+  "generator": "scripts/export_results.py",
+  "result_files": {
+    "corruption_type_metrics.csv": 10,
+    "main_metrics.csv": 6,
+    "step_position_metrics.csv": 6
+  },
+  "schema_version": "finprm-release-results-v1",
+  "source_policy": "Existing completed artifacts only; no model inference",
+  "sources": {
+    "runs/qwen-prm-base-seed-42/base-dev/metrics.json": "4703341bb6d2e8030b26e0264b80202c246d5b89e0fba213deddc54ea55b56bc",
+    "runs/qwen-prm-base-seed-42/base-test/metrics.json": "1a3f3c8e5a5ac922e1077b1df9ccb9b5339c240592f43510b06959c859681ab5",
+    "runs/qwen-prm-base-seed-42/base-test/predictions.jsonl": "f92e8d77d43eec6af5e8acce462bd3147561a626a6d48137631adcf00331e394",
+    "runs/qwen-prm-lora-seed-42/lora-dev/metrics.json": "bd829847e1c502454a1453fef7b1d00357dc6b2efcffd32f1f0133424ec4b738",
+    "runs/qwen-prm-lora-seed-42/lora-test/metrics.json": "1feaecf85537f15c1582105a37d4ebf0849874d291bc2edf70f65f420be1fe76",
+    "runs/qwen-prm-lora-seed-42/lora-test/predictions.jsonl": "0f3e2c3784c4660e037f2db65fdf37db6444de184a0e5f917d116d425a63632d",
+    "runs/retrieval-primary/base-dev/metrics.json": "c21b368152daadb3f3121485c3b93348a41d515908e0a59938c96f761e37a84b",
+    "runs/retrieval-primary/base-test/metrics.json": "c45810a487f749d120291c202ce259d0540f7c8d0dfc76b4796afda90e9eefa5",
+    "runs/retrieval-primary/lora-dev/metrics.json": "06df285be2ecd6997e10fdaac91671cd98e2a43091c913365bb0e92737e008bf",
+    "runs/retrieval-primary/lora-test/metrics.json": "b9f6c2551f302ec71b281f31f33998851821a442746693c65ea4a92f2e63f873",
+    "runs/retrieval-question-k2/base-dev/metrics.json": "6e67dd103be0af04ca13b058b3c565de2a58a19d9ae54b5291a61e697b4a6fb8",
+    "runs/retrieval-question-k2/base-test/metrics.json": "1f35556f679a56636e8dbe06a79b806dbaad5c61c97471c82acfe3ca213dc41e",
+    "runs/retrieval-question-k2/lora-dev/metrics.json": "730c06c740a53731992677093d0eac8db1f5dd8e18283f17d35523f1499d4156",
+    "runs/retrieval-question-k2/lora-test/metrics.json": "f94f4ee03dce1b31ebe4052711104a5afafb598202ec1c16137946463f277f4f"
+  }
+}

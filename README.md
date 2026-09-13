@@ -1,214 +1,173 @@
-# FinPRM-Adapt
+# FinPRM
 
-Research project on parameter-efficient adaptation of process reward models (PRMs) to structured financial numerical reasoning.
+FinPRM studies step-level process verification for numerical reasoning on FinQA. It uses Qwen2.5-Math-PRM-7B as a shared backbone and compares FinQA QLoRA adaptation with retrieved in-context demonstrations.
 
-The proposed study constructs binary step-verification examples from FinQA's executable gold programs and compares four conditions:
 
-1. an unadapted base verifier;
-2. retrieval-only adaptation;
-3. LoRA-based supervised fine-tuning;
-4. retrieval combined with LoRA.
+## Approach
 
-## Repository contents
+![FinPRM method overview](assets/figures/overview.png)
 
-- `latex/finprm_proposal.tex` - editable LaTeX manuscript
-- `latex/references.bib` - bibliography
-- `output/pdf/finprm_proposal.pdf` - compiled proposal
-- `PRM project.pdf` - original project concept
+Each example contains a FinQA question, the supporting evidence, the previous correct steps, and one candidate reasoning step. Then Qwen2.5-Math-PRM-7B predicts whether the candidate step is correct.
 
-The implementation includes deterministic FinQA process-example construction,
-native Qwen PRM scoring, QLoRA adaptation, and Train-only demonstration
-retrieval.
+We compare two ways to adapt the PRM.
+- QLoRA fine-tunes the model on FinQA training examples.
+- Retrieval doesn't change the model, it provides similar labeled examples from the Train set at inference time.
 
-## Local setup
+## Experimental Setup
 
-Use Python 3.11 when creating a fresh environment. The current foundation also
-runs on Python 3.9 so it can be tested with the macOS system Python.
+### Data
 
-```sh
-uv sync --extra dev --python 3.11
-uv run python scripts/download_finqa.py
-uv run python scripts/validate_finqa.py data/raw/finqa/train.json --limit 100
-uv run pytest
-```
+The experiments use the official FinQA Train, Dev, and Test splits. Each gold program is converted into step-level examples.
 
-The dataset is downloaded from the official FinQA repository at a pinned
-revision. Files under `data/` are intentionally ignored by Git and are not
-uploaded to this repository.
+| Split | FinQA examples | Gold program steps | Primary step examples | Role |
+|---|---:|---:|---:|---|
+| Train | 6,251 | 9,598 | 19,152 | QLoRA training and retrieval index |
+| Dev | 883 | 1,362 | 2,722 | Threshold selection |
+| Test | 1,147 | 1,772 | 3,538 | Final evaluation |
 
-## Laptop integration test
 
-- `configs/local.yaml` uses `hf-internal-testing/tiny-random-bert`. This is a
-  deliberately tiny model with random weights. Its predictions are meaningless;
-  it only verifies tokenization, batching, training, saving, and reloading.
-The tiny random BERT checkpoint is not an experimental baseline. It verifies the
-complete software path using an unaudited pilot: stable text serialization,
-question-grouped splitting, tokenization, binary training, evaluation, model
-saving, and prediction-equivalent reloading.
+### Conditions
 
-Long inputs are truncated from the evidence side only. The smoke trainer checks
-that the complete question, correct prefix, candidate, and task fit within
-`max_length`; it fails instead of silently truncating those protected fields and
-records length statistics in `metrics.json`.
+The primary experiment is a 2×2 design over parameter adaptation and retrieved demonstrations:
 
-```sh
-uv sync --extra dev --extra ml --python 3.11
-uv run python scripts/train_smoke.py --config configs/local.yaml
-```
+| | No retrieved demonstrations | Train demonstrations retrieved with the joint key |
+|---|---|---|
+| Base PRM | Base | Retrieval |
+| QLoRA-adapted PRM | LoRA | Retrieval + LoRA |
 
-Outputs are written under ignored `runs/local-smoke/`. Accuracy from this run is
-not a research result because the checkpoint is random and the pilot labels have
-not completed human audit.
+In the main retrieval setting, we retrieve the two most similar Train examples using the question, previous correct steps, and current candidate step.
 
-On a CUDA machine, first rebuild the ignored pilot data and run the identical
-pipeline with:
+We also test a simpler retrieval variant that uses only the question to find two similar examples.
 
-```sh
-uv run python scripts/train_smoke.py --config configs/cuda_pipeline_smoke.yaml
-```
+### Evaluation
 
-This must report `"device": "cuda"` and a near-zero reload difference before a
-real checkpoint or LoRA training is attempted.
+The primary metrics are Accuracy, Macro-F1, and AUROC;
 
-## Build a process-supervision pilot
+## Key Results
 
-Each gold FinQA operation becomes a positive next-step example. The builder also
-creates conservative negatives through one operator substitution or operand
-reversal at a time. Finance-specific rules additionally replace a number with a
-different number from the same local evidence unit and remove explicit percent
-or scale conversion. A diagnostic rule creates dangling intermediate references.
-The builder rejects candidates that preserve the gold step value or the complete
-program's final answer. Invalid references are retained only when the validator
-confirms that the candidate points to an unavailable step.
+Test results are from `results/main_metrics.csv`.
 
-The implemented corruption labels are:
+| Condition | Accuracy | Macro-F1 | AUROC |
+|---|---:|---:|---:|
+| Base | 0.6843 | 0.6830 | 0.7164 |
+| Base + question-only retrieval | 0.6979 | 0.6914 | 0.7163 |
+| Base + joint retrieval | 0.6834 | 0.6772 | 0.7161 |
+| LoRA | 0.9421 | 0.9421 | 0.9839 |
+| LoRA + question-only retrieval | 0.9262 | 0.9262 | 0.9786 |
+| LoRA + joint retrieval | 0.9158 | 0.9158 | 0.9718 |
 
-- `entity_context_swap`: substitute a number found beside the original number
-  in the same question, supporting sentence, report sentence, or table row;
-- `unit_scale_mismatch`: remove an explicit percent sign or scale multiplier;
-- `dangling_reference`: point to a current, not-yet-produced intermediate value;
-- `operator_substitution`: retain operands but change the arithmetic operator;
-- `operand_reversal`: reverse arguments for an order-sensitive operator.
+![Test Macro-F1 across adaptation conditions](assets/figures/main_macro_f1.svg)
 
-Arithmetic-result corruption is intentionally excluded from the structured core:
-an operation such as `subtract(4500, 1200)` does not contain a claimed result for
-us to corrupt. That error family becomes applicable only if an optional
-natural-language trace says, for example, that the result is 3100.
+- FinQA QLoRA substantially improves performance over the Base PRM.
+- Retrieval has limited effect on the Base PRM.
+- Retrieval does not improve LoRA in this setup; both retrieval variants perform below LoRA alone.
 
-```sh
-uv run python scripts/build_process_data.py \
-  data/raw/finqa/train.json \
-  --split train \
-  --output data/processed/pilot-hard-v2 \
-  --limit 100 \
-  --negatives-per-positive 2 \
-  --audit-per-group 50 \
-  --seed 42
-```
+![Macro-F1 by candidate-step position](assets/figures/step_position_macro_f1.svg)
 
-The ignored output directory contains:
+Base performance declines at later step positions, while LoRA remains strong across the sequence.
 
-- `examples.jsonl`: complete model inputs, targets, and audit metadata;
-- `summary.json`: counts, rejection reasons, and a deterministic checksum;
-- `audit_sample.csv`: deterministic, stratified rows for manual review; and
-- `audit_sample.jsonl`: the same audit examples with complete context.
+![Accuracy on negative examples by corruption type](assets/figures/corruption_type_accuracy.svg)
 
-The audit includes positives and up to 50 examples from every retained
-corruption type, distributed across step positions and program lengths. An
-exported audit is not considered reviewed until a person fills in
-`human_valid` and `review_notes`.
+LoRA improves rejection accuracy across all five corruption types. The largest contrast occurs for dangling references.
 
-Generated data remains outside Git. The builder and its validation rules are
-committed so the same records can be reproduced on another machine.
+## Reproducibility
 
-For development and test, create the primary label-balanced evaluation set
-after building the full diagnostic data:
-
-```sh
-uv run python scripts/build_evaluation_set.py \
-  data/processed/dev-full/examples.jsonl \
-  --output data/processed/dev-primary \
-  --seed 42
-```
-
-This keeps one positive and one accepted negative per eligible source step.
-The deterministic sampler assigns scarce corruption families first and records
-the resulting per-type counts. Keep the full diagnostic set for error-type
-analysis; do not tune the sampler from model performance on test data.
-
-## Compile the proposal
-
-From the `latex` directory:
-
-```sh
-latexmk -pdf -outdir=../output/pdf finprm_proposal.tex
-```
-
-## Implementation structure
+### Repository Structure
 
 ```text
-src/
-  finprm/
-    data/       FinQA parsing and process-example construction
-    models/     serialization and native Qwen PRM utilities
-    retrieval/  Train-only dense demonstration retrieval
-scripts/        data, evaluation, training, and operational entry points
-configs/        frozen experiment defaults and local smoke configuration
-tests/          data, serialization, sampling, and retrieval tests
+finPRM/
+├── assets/figures/      # Corresponding figures
+├── configs/             # Frozen experiment and retrieval settings
+├── results/             # Lightweight result tables
+├── scripts/             # Data, training, retrieval, evaluation, and entry points
+├── src/
+│   └── finprm/
+│       ├── data/        # FinQA parsing and step example construction
+│       ├── models/      # Qwen PRM processing
+│       ├── retrieval/   # Demonstration indexing and formatting
+│       └── evaluation/  # Metrics and threshold selection
+└── tests/               # Deterministic unit and integration tests
+
 ```
 
-Large datasets, model checkpoints, and experiment logs are intentionally excluded from version control.
+### Setup
 
-## Prepared GPU workflow
-
-The frozen primary checkpoint is Qwen/Qwen2.5-Math-PRM-7B at revision
-`0610740060112df12585d00a1c5f4624d2f59051`. It is loaded through its native
-`Qwen2ForProcessRewardModel` implementation, and only the final `<extra_0>`
-position for the candidate operation is used as `p_correct`. Base and LoRA
-evaluation both use the same NF4 quantized load so a precision change is not
-mistaken for an adapter gain.
-
-On the CUDA 12.8 / PyTorch 2.8 / Python 3.12 image, run:
+From the repository root, execute:
 
 ```sh
-cd /root/autodl-tmp/finPRM
 ./scripts/setup_gpu.sh
+```
+
+Download and verify the FinQA splits, build the process datasets, create the primary balanced sets, and prepare the frozen PRM checkpoint:
+
+```sh
+
 ./scripts/prepare_assets.sh
+
+```
+
+### Experiment Commands
+
+Run the CUDA pipeline smoke test before the full experiment:
+
+```sh
+
 ./scripts/run_gpu_smoke.sh
+
+```
+
+Run Base evaluation and the QLoRA experiment:
+
+```sh
+
 ./scripts/run_lora_experiment.sh
+
 ```
 
-`setup_gpu.sh` reuses the image-provided PyTorch and installs a pinned PRM/QLoRA
-compatibility set. `prepare_assets.sh` verifies source checksums, validates and
-builds all official splits, creates label-balanced primary manifests, downloads
-the frozen checkpoint from Qwen's official ModelScope mirror at immutable
-revision `5699834a93b4707388291a5d6be57a30dfcf310e`, verifies every large
-weight shard by SHA256, and checks its architecture and reward-token ID. The GPU
-smoke test runs eight base examples, eight QLoRA training examples, and an
-adapter reload/score. Only after it succeeds should the full experiment run.
-
-The experiment selects thresholds independently for base and LoRA using the
-same dev macro-F1 rule, then applies each frozen threshold once to test. It
-saves per-example probabilities, metrics, adapters, package versions, GPU
-information, Git status, and the exact uncommitted code diff under `runs/`.
-
-## Retrieval workflow
-
-Retrieval uses the frozen `BAAI/bge-small-en-v1.5` checkpoint, a Train-only
-index, and two supported keys: `question` and `joint` (question, prefix, and
-candidate). Labels are added to demonstrations only after similarity search.
-
-Build the index and prompt-length plans without running PRM inference:
+Build the retrieval index and frozen prompt plans, then run the retrieval experiment:
 
 ```sh
+
 ./scripts/run_retrieval_sanity.sh
+
+./scripts/run_retrieval_experiment.sh
+
 ```
 
-After reviewing those plans, run the frozen primary joint condition or the
-question-only ablation. These commands reuse the existing LoRA adapter and do
-not train either model:
+Run the secondary question-only retrieval ablation:
 
 ```sh
-./scripts/run_retrieval_experiment.sh
+
 ./scripts/run_retrieval_experiment.sh question
+
 ```
+
+Generate the result tables and regenerate the SVG figures:
+
+```sh
+
+PYTHONPATH=src .venv/bin/python scripts/export_results.py
+
+PYTHONPATH=src .venv/bin/python scripts/plot_results.py
+
+```
+
+## Limitations
+
+This project evaluates step-level verification on FinQA, not general financial reasoning.
+
+All experiments use the gold supporting evidence provided by FinQA, and negative examples are created by modifying correct program steps by ourselves.
+
+Therefore, the results mainly reflect performance on this specific FinQA verification task and do not show how well the model would perform on broader financial reasoning or evidence retrieval.
+
+## References
+
+- Chen et al. (2021), [FinQA: A Dataset of Numerical Reasoning over Financial Data](https://aclanthology.org/2021.emnlp-main.300/).
+
+- Lightman et al. (2023), [Let's Verify Step by Step](https://arxiv.org/abs/2305.20050).
+
+- Qwen Team, [Qwen2.5-Math-PRM-7B](https://huggingface.co/Qwen/Qwen2.5-Math-PRM-7B).
+
+- Dettmers et al. (2023), [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314).
+
+- BAAI, [BGE small English v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5).
