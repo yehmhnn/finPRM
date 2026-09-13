@@ -1,6 +1,11 @@
 import unittest
 
-from finprm.data.program import execute_program, parse_number, parse_program
+from finprm.data.program import (
+    execute_program,
+    execution_values_equal,
+    parse_number,
+    parse_program,
+)
 
 
 class ProgramTests(unittest.TestCase):
@@ -48,6 +53,11 @@ class ProgramTests(unittest.TestCase):
         result = execute_program("table_average(not numeric, none)", self.table)
         self.assertFalse(result.valid)
         self.assertEqual("non_numeric_table_row", result.error_type)
+
+    def test_execution_answer_comparison_matches_official_rounding(self):
+        self.assertTrue(execution_values_equal(0.33333, 1 / 3))
+        self.assertFalse(execution_values_equal(0.33332, 1 / 3))
+        self.assertTrue(execution_values_equal("yes", "yes"))
 
 
 if __name__ == "__main__":

@@ -95,6 +95,20 @@ class ProcessExampleTests(unittest.TestCase):
         ]
         self.assertEqual("divide(#1, 1000)", str(dangling[0].operation))
 
+    def test_rejects_gold_program_that_disagrees_with_execution_answer(self):
+        bad = source()
+        bad = FinQAExample(**{**bad.__dict__, "execution_answer": 0.25})
+        result = build_process_examples(bad, "train", 2, seed=42)
+        self.assertEqual([], result.examples)
+        self.assertEqual(1, result.rejections["gold_answer_mismatch"])
+
+    def test_metadata_records_program_length_and_validator_version(self):
+        result = build_process_examples(source(), "train", 0, seed=42)
+        self.assertTrue(all(item.metadata.program_length == 2 for item in result.examples))
+        self.assertTrue(
+            all(item.metadata.validator_version == "finprm-validator-v3" for item in result.examples)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

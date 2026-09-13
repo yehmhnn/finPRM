@@ -206,3 +206,17 @@ def execute_program(
     if isinstance(final, float):
         final = round(final, 5)
     return ExecutionResult(True, final, tuple(steps))
+
+
+def execution_values_equal(actual: Any, expected: Any) -> bool:
+    """Compare an executor result with FinQA's stored ``exe_ans``.
+
+    The pinned official evaluator rounds numeric program outputs to five decimal
+    places and then uses exact equality.  Keeping that convention here avoids
+    silently accepting examples that the benchmark itself would mark wrong.
+    """
+    if isinstance(actual, float) and isinstance(expected, (int, float)):
+        if isinstance(expected, bool) or not math.isfinite(float(expected)):
+            return False
+        return actual == round(float(expected), 5)
+    return actual == expected

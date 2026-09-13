@@ -7,6 +7,7 @@ from finprm.models.serialization import (
     SerializedExample,
     grouped_train_eval_split,
     load_process_jsonl,
+    protected_input_suffix,
     serialize_input,
 )
 
@@ -61,7 +62,14 @@ class SerializationTests(unittest.TestCase):
         self.assertFalse(train_ids & evaluation_ids)
         self.assertEqual(len(examples), len(train) + len(evaluation))
 
+    def test_protected_suffix_keeps_question_prefix_and_candidate(self):
+        text = serialize_input(process_input(), "gold")
+        protected = protected_input_suffix(text)
+        self.assertTrue(protected.startswith("[QUESTION]"))
+        self.assertIn("[CORRECT PREFIX]", protected)
+        self.assertIn("[CANDIDATE NEXT OPERATION]", protected)
+        self.assertNotIn("[EVIDENCE TABLE]", protected)
+
 
 if __name__ == "__main__":
     unittest.main()
-

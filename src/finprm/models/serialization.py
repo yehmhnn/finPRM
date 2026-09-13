@@ -6,9 +6,10 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple, Union
+from typing import Any, List, Mapping, Sequence, Tuple, Union
 
 SERIALIZER_VERSION = "finprm-serializer-v1"
+PROTECTED_INPUT_MARKER = "[QUESTION]"
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,14 @@ def serialize_input(process_input: Mapping[str, Any], evidence_mode: str = "gold
     return "\n".join(sections)
 
 
+def protected_input_suffix(text: str) -> str:
+    """Return the question, prefix, candidate, and task portion of an input."""
+    position = text.find(PROTECTED_INPUT_MARKER)
+    if position < 0:
+        raise ValueError(f"serialized input lacks {PROTECTED_INPUT_MARKER}")
+    return text[position:]
+
+
 def load_process_jsonl(
     path: Union[Path, str], evidence_mode: str = "gold"
 ) -> List[SerializedExample]:
@@ -110,4 +119,3 @@ def grouped_train_eval_split(
     if not train or not evaluation:
         raise ValueError("grouped split produced an empty partition; use more source questions")
     return train, evaluation
-

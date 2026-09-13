@@ -10,9 +10,17 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .finqa import FinQAExample
-from .program import Operation, Scalar, execute_program, parse_number, parse_program
+from .program import (
+    Operation,
+    ProgramParseError,
+    Scalar,
+    execute_program,
+    execution_values_equal,
+    parse_number,
+    parse_program,
+)
 
-VALIDATOR_VERSION = "finprm-validator-v2"
+VALIDATOR_VERSION = "finprm-validator-v3"
 
 NUMERIC_OPERATOR_ALTERNATIVES: Mapping[str, Tuple[str, ...]] = {
     "add": ("subtract", "multiply", "divide"),
@@ -52,6 +60,7 @@ class ProcessMetadata:
     finqa_id: str
     split: str
     step_index: int
+    program_length: int
     gold_operation: str
     corruption_type: Optional[str]
     corruption_details: Optional[Dict[str, str]]
@@ -98,6 +107,7 @@ def _stable_id(
             str(label),
             str(candidate),
             corruption_type or "positive",
+            VALIDATOR_VERSION,
         ]
     ).encode("utf-8")
     digest = hashlib.sha256(payload).hexdigest()[:16]
@@ -146,6 +156,7 @@ def _make_example(
             finqa_id=source.example_id,
             split=split,
             step_index=step_index,
+            program_length=len(operations),
             gold_operation=str(gold),
             corruption_type=corruption_type,
             corruption_details=corruption_details,
@@ -332,10 +343,17 @@ def build_process_examples(
     if max_negatives_per_positive < 0:
         raise ValueError("max_negatives_per_positive must be non-negative")
 
-    operations = parse_program(source.program)
+    try:
+        operations = parse_program(source.program)
+    except ProgramParseError:
+        return BuildResult([], Counter({"invalid_gold_program": 1}))
     gold_trace = execute_program(operations, source.table)
     if not gold_trace.valid:
         return BuildResult([], Counter({"invalid_gold_program": 1}))
+    if source.execution_answer is None:
+        return BuildResult([], Counter({"missing_execution_answer": 1}))
+    if not execution_values_equal(gold_trace.value, source.execution_answer):
+        return BuildResult([], Counter({"gold_answer_mismatch": 1}))
 
     examples: List[ProcessExample] = []
     rejections: Counter[str] = Counter()
