@@ -1,0 +1,13 @@
+# Compatibility set for the Qwen PRM remote code and the CUDA 12.8 image.
+# PyTorch is supplied by the server image and intentionally omitted.
+accelerate==1.4.0
+bitsandbytes==0.47.0
+huggingface-hub==0.29.3
+modelscope==1.40.0
+numpy==2.2.3
+peft==0.14.0
+pyyaml==6.0.2
+safetensors==0.5.3
+scikit-learn==1.6.1
+sentencepiece==0.2.0
+transformers==4.48.3

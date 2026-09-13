@@ -15,6 +15,7 @@ from finprm.models.serialization import (
     SERIALIZER_VERSION,
     grouped_train_eval_split,
     load_process_jsonl,
+    protected_input_suffix,
 )
 
 
@@ -106,6 +107,33 @@ def main() -> None:
     max_length = int(model_config["max_length"])
 
     def tensor_dataset(items):
+        protected_lengths = [
+            len(
+                tokenizer(
+                    protected_input_suffix(item.text),
+                    add_special_tokens=True,
+                    truncation=False,
+                )["input_ids"]
+            )
+            for item in items
+        ]
+        too_long = [
+            item.stable_id
+            for item, length in zip(items, protected_lengths)
+            if length > max_length
+        ]
+        if too_long:
+            preview = ", ".join(too_long[:5])
+            raise ValueError(
+                f"{len(too_long)} examples have question/prefix/candidate content "
+                f"longer than max_length={max_length}; examples: {preview}"
+            )
+        full_lengths = [
+            len(tokenizer(item.text, add_special_tokens=True, truncation=False)["input_ids"])
+            for item in items
+        ]
+        original_truncation_side = tokenizer.truncation_side
+        tokenizer.truncation_side = "left"
         encoded = tokenizer(
             [item.text for item in items],
             padding="max_length",
@@ -113,19 +141,29 @@ def main() -> None:
             max_length=max_length,
             return_tensors="pt",
         )
+        tokenizer.truncation_side = original_truncation_side
         labels = torch.tensor([item.label for item in items], dtype=torch.long)
-        return TensorDataset(encoded["input_ids"], encoded["attention_mask"], labels)
+        stats = {
+            "examples": len(items),
+            "max_full_tokens": max(full_lengths),
+            "max_protected_tokens": max(protected_lengths),
+            "truncated_examples": sum(length > max_length for length in full_lengths),
+            "truncation_side": "left",
+        }
+        return TensorDataset(encoded["input_ids"], encoded["attention_mask"], labels), stats
 
     training_config = config["training"]
     generator = torch.Generator().manual_seed(seed)
+    train_dataset, train_length_stats = tensor_dataset(train_examples)
+    eval_dataset, eval_length_stats = tensor_dataset(eval_examples)
     train_loader = DataLoader(
-        tensor_dataset(train_examples),
+        train_dataset,
         batch_size=int(training_config["batch_size"]),
         shuffle=True,
         generator=generator,
     )
     eval_loader = DataLoader(
-        tensor_dataset(eval_examples),
+        eval_dataset,
         batch_size=int(training_config["batch_size"]),
     )
     optimizer = AdamW(model.parameters(), lr=float(training_config.get("learning_rate", 5e-5)))
@@ -187,6 +225,10 @@ def main() -> None:
             "gradient_accumulation_steps": accumulation_steps,
             "elapsed_seconds": time.perf_counter() - started,
             "reload_max_logit_difference": reload_max_difference,
+            "token_length_stats": {
+                "train": train_length_stats,
+                "evaluation": eval_length_stats,
+            },
         }
     )
     (output_dir / "metrics.json").write_text(
